@@ -1,0 +1,611 @@
+---
+title: "Analysis of Credit Approval Data"
+author: "Ryan Kuhn"
+output:
+  html_document:
+    theme: journal
+    toc: yes
+    toc_float: true
+  pdf_document:
+    toc: yes
+  word_document: default
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(eval=F, message = F, warning = F)
+```
+
+## Objective
+The purpose of this analysis is to demonstrate the analytical techniques learned in the Special Topics in Audit Analytics course offered by Rutgers University. 
+I will use the Credit Approval Dataset which is a collection of credit card applications and the credit approval decisions. 
+The data is available from the [UCI Machine Learning Repository](http://archive.ics.uci.edu/ml/datasets.html?format=&task=&att=&area=bus&numAtt=&numIns=&type=&sort=nameUp&view=table). 
+The techniques include data visualization, association rules, logistical regression, and decision trees. This analysis is organized as follows:  
+
+1. Generate several data visualizations to understand the underlying data; 
+2. Perform data transformations as needed; 
+3. Develop research questions about the data; and 
+4. Generate and apply the model to answer the research questions.
+
+
+## Executive Summary  
+This analysis demonstrates several analytic techniques to examine one company's decision to approve or deny credit card applications. 
+The final model created out of this analysis is a combination of a logarithmic regression model and classification and regression tree (CART) model. 
+This model was able to predict the outcome of a credit applications with 84% accuracy which was significantly better performance than the baseline model. 
+
+Through the model we can understand that there are four affect the approval decision while others have no impact. 
+The four factors all positively affect the outcome and that as these factors increase, so does the probability that a credit card will be issued.  
+The four influencing factors are:  
+
+- Prior default, 
+- Years employed, 
+- Credit score, and 
+- Income level.  
+
+Other variables such as age, sex, or ethnicity did not have an influence on whether the application was denied. 
+A Chi Squared test for independence validated our conclusion Ethnicity and Approval status are independent.
+
+
+## Exploratory Analysis and Data Transformations
+
+```{r environment, echo=F, message=FALSE, warning=FALSE}
+# Set the environment
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(caTools)
+library(arules)
+library(arulesviz)
+library(scales)
+library(dplyr)
+
+options(scipen=6, width=100)
+opts_knit$set(width=75)
+setwd("C:/Users/Ryan/Google Drive/School/R-Audit Analytics II/Project")
+opts_chunk$set(echo=F, 
+               message=F, 
+               warning=F, 
+               comment=NA)
+#               fig.width=6.5, 
+#               fig.align='center',
+```
+
+The first step in any analysis is to obtain the [dataset](http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/) and [codebook](http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.names). 
+Both the dataset and the codebook can be downloaded for free from the UCI website. 
+A quick review of the codebook shows that all of the values in the dataset have been converted to meaningless symbols to protect the confidentiality of the data. 
+This will still suit our purposes as a demonstration dataset since we are not using the data to develop actual credit screening criteria. 
+However, to make it easier to work with the dataset, I gave the variables working names based on the type of data. 
+
+```{r loadData}
+#Download the data
+myURL<- "http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.data"
+if(!file.exists("Dataset.csv")){
+    download.file(myURL,"Dataset.csv")
+    }
+rm(myURL)
+
+# Load the data
+Cols<- c(rep("character",2),"numeric",rep("character",4),"numeric",rep("character",2),
+         "numeric",rep("character",3),"numeric","character")
+Data<-read.csv("Dataset.csv",sep=",",colClasses=Cols)
+rm(Cols)
+
+# Give column names by letter
+# names(Data)<- LETTERS[1:16]
+names(Data)<-c("Male","Age","Debt","Married","BankCustomer","EducationLevel","Ethnicity","YearsEmployed","PriorDefault","Employed","CreditScore","DriversLicense","Citizen","ZipCode","Income","Approved")
+```
+
+Once the dataset is loaded, we'll use the str() function to quickly understand the type of data in the dataset. 
+This function only shows the first few values for each column so there may be surprises deeper in the data but it's a good start. 
+Here you can see the names assigned to the variables. 
+The first 15 variables are the credit application attributes. 
+The Approved variable is the credit approval status and target value.
+
+Using the output below, we can see that the outcome values in Approved are '+' or '-' for whether credit had been granted or not. 
+These character symbols aren't meaningful as is so will need to be transformed. 
+Turning the '+' to a '1' and the '-' to a '0' will help with classification and logistic regression models later in the analysis.
+
+```{r str, echo=F, results='hold'}
+# Convert binary values to 1 or 0
+Data$Male<- ifelse(Data$Male=="a",1,0)
+Data$Employed<- ifelse(Data$Employed=="t",1,0)
+Data$PriorDefault<-ifelse(Data$PriorDefault=="t",1,0)
+
+str(Data)
+```
+
+
+### Data Transformations
+As previously mentioned the binary values, such as Approved, need to be converted to 1s and 0s. 
+We'll need to do additional transformations such as filling in missing values. 
+That process begins by first identifying which values are missing and then determining the best way to address them. We can remove them, zero them out, or estimate a plug value. 
+A scan through the dataset shows that missing values are labeled with '?'. 
+For each variable, we'll convert the missing values to NA which R will interpret differently than a character value. 
+
+
+
+```{r transformations}
+
+# Convert credit granted to 1 or 0
+Data$Approved<-ifelse(Data$Approved=="+",1,0)
+Data$Approved<-factor(Data$Approved)
+
+Data[Data=="?"]<-NA
+```
+
+### Continuous Values (Linear Regression and Descriptive Statistics)
+To start with, we will use the summary() function to see the descriptive statistics of the numeric values such as min, max, mean, and median. 
+The range is the difference between the minimum and maximum values and can be calculated from the summary() output. 
+For the B variable, the range is 66.5 and the standard deviation is 11.9667.
+
+```{r}
+Data$Age<-as.numeric(Data$Age)
+Numeric<- Data[,c(2:3,8,11,15)]
+
+summary(Numeric)
+
+Mean.Age<- mean(Numeric$Age,na.rm=T)
+
+SD.Age<-round(sd(Numeric$Age, na.rm=T),4)
+SD.Age
+```
+
+**Missing Values**  
+We can see from the summary output that the Debt variable has missing values that we'll have to fill in. 
+We could simply use the mean of all the existing values to do so. 
+Another method would be to check the relationship among the numeric values and use a linear regression to fill them in. 
+The table below shows the correlation between all of the variables. 
+The diagonal correlation values equal 1.000 because each variable is perfectly correlated with itself. 
+To read the table, we will look at the data by rows. 
+The largest value in the first row is 0.396 meaning age is most closely correlated with YearsEmployed. 
+Similarly, Debt is mostly correlated with YearsEmployed. 
+
+```{r corelations}
+round(cor(Numeric,use="complete.obs"),3)
+```
+We can use this information to create a linear regression model between the two variables. 
+The model produces the two coefficients below: Intercept and YearsEmployed. 
+These coefficients are used to predict future values. 
+The YearsEmployed coefficients is multiplied by the value for YearsEmployed and the intercept is added. 
+
+
+```{r predictage}
+AgeMdl<-lm(Age~YearsEmployed, data=Data,na.action=na.exclude)
+Missing<-which(is.na(Data$Age))
+Data$Age[Missing]<- predict(AgeMdl,newdata=Data[Missing,])
+```
+
+```{r correlationcoefficient}
+AgeMdl$coefficients
+```
+In item 83, for example, the YearsEmployed value is 
+```{r}
+Data$YearsEmployed[83]`. 
+```
+
+The formula is then 
+
+```{r} 
+Data$YearsEmployed[83]` x 1.412399 + 28.446953= `r Data$Age[83]
+```
+
+. 
+
+This method was used to estimate all 12 missing values in the Age variable.
+  
+**Descriptive Statistics**  
+The next step of working with continuous variables is to standardize them or calculate the z-score. 
+First, we use the mean and standard deviation calculated above. 
+Then, subtract the mean from each value and, finally, divide by the standard deviation. 
+The end result is the z-score. 
+When we plot the histograms, the distribution looks the same but the z-scores are easier to work with because the values are measured in standard deviations instead of raw values. 
+One thing to note is that the data is skewed to the right because the tail is longer.
+
+```{r transformation, fig.height=3}
+#Convert to z score
+Data$AgeNorm<- (Data$Age-mean(Data$Age, na.rm=T))/SD.Age
+rm(SD.Age, Mean.Age)
+
+# View the distribution
+par(mfrow=c(1,2), oma=c(0,0,1,0))
+hist(Data$Age,main=NULL,xlab="Age",col="blue")
+hist(Data$AgeNorm,main=NULL,xlab="AgeNorm",ylab=NULL,col="green")
+title("Distribution of Values Before and After Normalization",outer=T)
+```
+
+```{r devoff, results='hide'}
+dev.off()
+```
+Now that we have an understanding of how this variable is distributed, we can compare the credit status by value of AgeNorm. 
+We'll use a boxplot showing the mean value for each group and the quartiles. 
+We can tell from the boxplot, that the median of the two groups is slightly different with the age of approved applications being slightly closer to the mean than the denied applications. 
+We can also see that the interquartile range is greater on the 'Approved' than the others.
+We can interpret these facts as the credit applicants with lower Age values are less likely to be granted credit, however there are several outlying applicants with high values that still were not granted credit.  
+
+```{r plotage, fig.height=2}
+ggplot(Data) + 
+    aes(Approved,AgeNorm) + 
+    geom_boxplot(outlier.colour="red") +
+    theme_bw() +
+    coord_flip() +
+    labs(title="Distribution of AgeNorm by Credit Approval Status")
+```
+
+We did similar transformations on the other continuous variables and then plotted them.
+From the boxplots, we can see the distribution is different between the variables. 
+Income has the least amount of variance because the boxes are tightly grouped about the mean. 
+By examining the histograms we can see that the data is skewed to the right meaning the median is less than the mean. 
+The datasets could be good candidates for logarithmic transformation.
+
+
+```{r}
+# Scale the variables
+Temp<- data.frame(scale(Data[,c(3,8,11,15)],center=T,scale=T))
+colnames(Temp)<-c("DebtNorm","YearsEmployedNorm","CreditScoreNorm","IncomeNorm")
+Data<-cbind(Data,Temp)
+rm(Temp)
+```
+
+```{r, fig.height=6}
+par(mfrow=c(4,2),mar=c(4,4,2,2))
+hist(Data$DebtNorm,main=NULL,xlab="DebtNorm",col="red",ylab="Frequency")
+boxplot(DebtNorm~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="DebtNorm")
+
+hist(Data$YearsEmployedNorm,main=NULL,xlab="YearsEmployedNorm",col="green")
+boxplot(YearsEmployedNorm~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="YearsEmployedNorm")
+
+hist(Data$CreditScoreNorm,main=NULL,xlab="CreditScoreNorm",col="blue")
+boxplot(CreditScoreNorm~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="CreditScoreNorm")
+
+hist(Data$IncomeNorm,main=NULL,xlab="IncomeNorm",col="orange")
+boxplot(IncomeNorm~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="IncomeNorm")
+```
+
+```{r, results='hide'}
+dev.off()
+```
+
+```{r}
+Temp<- data.frame(scale(log(Data[,c(3,8,11,15)]+1),center=T))
+names(Temp)<-c("DebtLog","YearsEmployedLog","CreditScoreLog","IncomeLog")
+Data<-cbind(Data,Temp)
+rm(Temp)
+```
+
+The charts below show the continuous variables after first taking the log of each value, and then converting it to normalized value similar to above. 
+The boxplots seem to add more informational value now because for each dataset the mean of the approved applications is further distributed from the mean of those denied. 
+This difference will help the classifier algorithm to distinguish between the values later. 
+We should specifically notice for the IncomeLog and CreditScoreLog variables that the applicants that did not receive credit were still heavily skewed to the right when compared to those that were granted credit.
+This means that a low IncomeLog or CreditScoreLog score is likely a good predictor for making the application decision.
+We can test this observation by using the significance in the models later.
+
+
+```{r, fig.height=6}
+par(mfrow=c(4,2),mar=c(4,4,2,2))
+hist(Data$DebtLog,main=NULL,xlab="DebtLog",col="red",ylab="Frequency")
+boxplot(DebtLog~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="DebtLog")
+
+hist(Data$YearsEmployedLog,main=NULL,xlab="YearsEmployedLog",col="green")
+boxplot(YearsEmployedLog~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="YearsEmployedLog")
+
+hist(Data$CreditScoreLog,main=NULL,xlab="CreditScoreLog",col="blue")
+boxplot(CreditScoreLog~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="CreditScoreLog")
+
+hist(Data$IncomeLog,main=NULL,xlab="IncomeLog",col="orange")
+boxplot(IncomeLog~Approved,data=Data,horizontal=T,ylim=c(-1.5,5),xlab="IncomeLog")
+```
+
+
+```{r, results='hide'}
+dev.off()
+
+# Simplify dataset to remove transformed points
+Data<- Data[,-c(2,3,8,11,15,18:21)]
+```
+
+
+### Categorical Variables (Association Rules)
+We will now work with categorical values in column Male. 
+The data is distributed across factors '1' and '0' plus 12 of them are missing values. 
+Again, the missing values will not work well in classifier models so we'll need to fill in them in. 
+The simplest way to do so is to use the most common value. 
+For example, since the '0' factor is the most common, we could replace all missing values with 'o'. 
+
+
+```{r}
+table(Data$Male,useNA="ifany")
+
+incomplete<-!complete.cases(Data)
+ToImpute<-Data[incomplete,]
+#row.names(ToImpute)
+```
+
+
+```{r}
+Data$Married  <-ifelse(is.na(Data$Married),"u",Data$Married)
+Data$BankCustomer <-ifelse(is.na(Data$BankCustomer),"g",Data$BankCustomer)
+Data$Ethnicity  <-ifelse(is.na(Data$Ethnicity),"v",Data$Ethnicity)
+Data$EducationLevel<-ifelse(is.na(Data$EducationLevel),"c",Data$EducationLevel)
+Data$ZipCode  <-ifelse(is.na(Data$ZipCode),"00000",Data$ZipCode)
+Data$Male <-ifelse(is.na(Data$Male),"b",Data$Male)
+```
+
+```{r}
+# Convert categorical variables to factors
+Data[,1:10]<- lapply(Data[1:10],function(x) factor(x))
+
+Data$Ethnicity<-relevel(Data$Ethnicity,"v")
+```
+
+A more complex method, and perhaps accurate method, would be to use association rules to estimate the missing values. 
+Association rules look at the different combinations of values that each of the rows can take and then provides a method for determining the most likely or least likely state. 
+As an example, row 248 is missing a value for the 'Male' column and we want to use rules to determine the most likely  value it would have. 
+We would look at the values in the other columns: Married = u, BankCustomer = g, and EducationLevel = c et cetera and then look to all of the other rows to find the combination that most clearly matches those in row 248. 
+In set notation the rule would look like this: {u,g,c} => {1}.
+The apriori algorithm can be used to generate the rules or combinations and then select the best one based on a few key metrics.  
+
+1. Support: Support is how often the left hand side of the rule occurs in the dataset. 
+In our example above, we would count how many times {u,g,c} occurs and divide by the total number of transactions.
+
+2. Confidence: Confidence measures how often a rule is true. 
+First, we find the subset of all transactions that contain {u,g,c}. 
+Of this subset, we then count the number of transactions that match the right hand side of rule, or {1}. 
+The confidence ratio is calculated by taking the number of times the rule is true and dividing it by the number of times the left hand side occurs.  
+
+
+```{r apriori, results='hide'}
+# Generate rules
+Rules<- apriori(Data[!incomplete,1:10], 
+                parameter=list(supp=0.1,
+                               conf=0.75,
+                               target='rules'))
+# Visualize rules
+# plot(Rules,measure=c("support","lift"),shading="confidence")
+
+```
+
+```{r}
+
+subRules<-head(sort(Rules, by="lift"),15)
+plot(subRules,method="graph", control=list(type="items", alpha=0.8))
+
+
+# Use for example
+    # First, convert row to transaction set
+basket<-as(Data[248,1:10],"transactions")
+
+    # Find rules wher the rhs equals A.  These rules imply the value in column A.
+Match.RHS<- subset(Rules, subset= rhs %pin% "Male")
+
+    # Of subset of rules, find those where the lhs is a subset of the items in the target row
+Match.LHS<-is.subset(Match.RHS@lhs, basket)
+```
+
+The rule that fits this example best is when EducationLevel = c, then Male = 0. 
+Hence, we plug '0' into the Male value for this row.
+
+```{r}
+# View the rules
+inspect(Match.RHS[Match.LHS])
+```
+
+  
+## Develop Research Questions
+
+1. Is there a correlation between Age, Income, Credit Score, and Debt levels and the credit approval status? 
+Can this relationship be used to predict if a person is granted credit? 
+If yes, does the relationship indicate reasonable risk management strategies?
+
+2.  Ethnicity is a protected status and the decision to approve or deny an application cannot be based on the applicant's ethnicity.  
+Is there a statistically significant difference in how credit is granted between ethnicities that could indicate bias or discrimination? 
+Contrarily, could the difference indicate a business opportunity?
+
+##Generate Analytic Models
+In order to prepare and apply a model to this dataset, we'll first have to break it into two subsets. 
+The first will be the training set on which we will develop the model. 
+The second will be the test dataset which we will use to test the accuracy of our model. 
+We will allocate 75% of the items to Training and 25% items to the Test set.  
+
+Once our dataset has been split, we can establish a baseline model for predicting whether a credit application will be approved.
+This baseline model will be used as a benchmark to determine how effective the models are. 
+First, we determine the percentage of credit card applications that were approved in the training set: 
+There are 517 applications and 287 or 56% of which were denied.
+Since more applications were denied than were approved, our baseline model will predict that all applications were denied.
+This simple model would be correct 56% of the time. 
+Our models have to be more accurate than 56% to add value to the business.
+
+```{r samplesplit}
+set.seed(1234)
+
+split<- sample.split(Data$Approved, SplitRatio=0.75)
+Train<- subset(Data,split==TRUE)
+Test <- subset(Data, split==FALSE)
+
+table(Train$Approved)
+rm(split)
+```
+
+### Logistic Regression
+**Create the Model**  
+Regression models are useful for predicting continuous (numeric) variables. 
+However, the target value in Approved is binary and can only be values of 1 or 0. 
+The applicant can either be issued a credit card or denied- they cannot receive a partial credit card.
+We could use linear regression to predict the approval decision using threshold and anything below assigned to 0 and anything above is assigned to 1. 
+Unfortunately, the predicted values could be well outside of the 0 to 1 expected range. 
+Therefore, linear or multivariate regression will not be effective for predicting the values. 
+Instead, logistic regression will be more useful because it will produce probability that the target value is 1. 
+Probabilities are always between 0 and 1 so the output will more closely match the target value range than linear regression.  
+    
+The model summary shows that the p-values for each coefficient. 
+Alongside these coefficients, the summary gives R's usual at-a-glance scale of asterisks for significance. 
+Using this scale, we can see that the coefficients for AgeNorm and Debt3 are not significant. 
+We can likely simplify the model by removing these two variables and get nearly the same accuracy.  
+    
+```{r logmodel}
+LogFit<- glm(Approved~AgeNorm+DebtLog+YearsEmployedLog+CreditScoreLog+IncomeLog, data=Train,family=binomial)
+summary(LogFit)
+```
+    
+The confusion matrix shows the distribution of actual values and predicted values. 
+The top left value is the number of observations correctly predicted as denied credit and the bottom right is the number of observations correctly predicted as credit granted. 
+The other values are the false positive and false negative values. 
+Of the 517 observations, the model correctly predicted 398 approval decisions (249 + 149) or about 77% accuracy.
+Already, we can see that we have improved on the baseline model and improved our accuracy by 21%.
+We can use this matrix to compare the results of the model after removing the non-significant variables.
+    
+```{r}
+LogPred<- predict(LogFit,newdata=Train, type="response")
+table(Train$Approved, LogPred>0.5)
+```
+    
+As noted above, the model can be simplified by removing the AgeNorm and Debt3 variables. 
+The three remaining numerical values are highly significant with low p-values. 
+We interpret these significance codes as being very useful in predicting the credit approval status.
+    
+    
+```{r logmdl2}
+LogFit2<- glm(Approved~YearsEmployedLog+CreditScoreLog+IncomeLog, data=Train,family=binomial)
+summary(LogFit2)
+```
+      
+The confusion matrix from this revised model is very close to the earlier version. 
+The model has correctly predicted 387 items which is only 12 fewer than before. 
+The accuracy is comparable -- 75% vs. 77% -- and the model is simpler.  
+    
+```{r}
+LogPred2<- predict(LogFit2,newdata=Train, type="response")
+table(Train$Approved, LogPred2>0.5)
+```
+    
+We've simplified the model intuitively by removing AgeNorm and Debt3 but we can accomplish the same process algorithmically by calling the step() function.
+This function simplifies a given model by removing variables with the lowest AIC value. 
+The resulting formula is the same as we intuitively selected earlier so we can be confident the model was optimized to be simple and still provide the most information.
+    
+```{r}
+LogFit3<- step(LogFit, trace=0)
+unclass(LogFit3)$formula
+```
+    
+    
+**Apply the Model**  
+We'll use the simplified model created above and apply it to the Test dataset to determine how effective it is. 
+Using a confusion matrix again, we can see that the logistic regression model has predicted 135 of 172 observations for 72% accuracy. 
+    
+    
+```{r aucscore, fig.width=4, fig.height=4}
+# Apply the model to the test set
+LogPred3<-predict(LogFit2, newdata=Test,type="response")
+    
+# Create a confusion Matrix
+table(Test$Approved,LogPred3>0.5)
+```
+
+    
+### Classification and Regression Tree
+**Create the Model**  
+Classification and Regression Trees (CART) can be used for similar purposes as logistic regression.
+They both can be used to classify items in a dataset to a binary class attribute.
+The trees work by splitting the dataset at series of nodes that eventually segregates the data into the target variable. 
+The models are sometimes referred to as decision trees because at each node the model determines which path the item should take.
+They have an advantage over logarithmic regression models in that the splits or decision are more easily interpreted than a collection of numerical coefficients and logarithmic scores.
+    
+The model split the training dataset at PriorDefault variable. 
+If the value in PriorDefault is f or false, then the target value will most likely be 0. 
+If the value is true, then the target will most likely be 1.
+    
+        
+```{r}
+set.seed(1234)
+TreeFit<-rpart(Approved~Male+Married+BankCustomer+EducationLevel+Ethnicity+PriorDefault+Employed+DriversLicense+Citizen+AgeNorm+DebtLog+YearsEmployedLog+CreditScoreLog+IncomeLog, 
+               data=Train, 
+               method="class",
+               control=rpart.control(xval=10,cp=0.025))
+
+TreeFit
+
+prp(TreeFit,main="CART model", digits=6, 
+    extra=1,
+    branch.col="blue",
+    type=4,
+    leaf.round=2,
+    box.col=c("pink","palegreen")[TreeFit$frame$yval],
+    ycompact=T)
+```
+
+The confusion matrix resulting from this CART model shows that we correctly classified 231 denied credit applications and 214 approved applications. 
+The accuracy score for this model is 86.1% which is better than the 75% accuracy the logistic regression model scored and significantly better than the baseline model.
+
+
+```{r}
+TreePred<-predict(TreeFit,newdata=Train,type="prob")
+table(Train$Approved,TreePred[,2]>0.5)
+
+```
+
+**Apply the Model** 
+We'll now apply our classifier model to the test dataset and determine how effective it is. 
+Our confusion matrix shows 144 items were correctly predicted for 83% accuracy. 
+We can see that this model is both more effective and easier to interpret than the logistic regression model.
+
+```{r}
+TreePred2<-predict(TreeFit,newdata=Test,type=c("prob"))
+table(Test$Approved,TreePred2[,2]>0.5)
+```
+
+### Ensemble the Models
+A combination of models can generally perform better than a single model. 
+This is referred to as ensembling. 
+By combining the logistic regression and classification tree, we may be able to improve the classification accuracy. 
+Both models generated a probability that a credit application would be approved. 
+We can combine these models by taking the average of the probability for each. 
+Overall, the ensembled model is slightly more accurate that the individual models with an accuracy of 84%.
+The difference is that the false positives rate (top right of the confusion matrix) is less than the logarithmic regression model and the false negative rate (lower left) is greater. 
+If this model is used to detect audit exceptions, a lower false positive rate means that less potential exceptions may be flagged for review. 
+The ensembled model flags more transactions for review than the logarithmic regression model.
+
+
+```{r}
+Combined<-cbind(TreePred2[,2],LogPred3)
+FinalPred<-rowMeans(Combined)
+table(Test$Approved,FinalPred>0.5)
+```
+
+## Interpret the Model and Research Questions Answered  
+Now that we've built a model, we can use the model to explain and understand how the business is operating. 
+We'll start by looking at the results of the logistic regression model. 
+There were 3 significant numeric variables- YearsEmployedLog, CreditScoreLog, and IncomeLog. 
+Remember that these 3 variables are the logarithmic transformations of YearsEmployed, CreditScore, and Income. 
+The other numeric variables fed into the model did not have a significant impact on the approval decision. 
+This means that Age and Debt did not have an influence on the final credit approval outcome. 
+The company's behavior is not expected. 
+We'd expect that the amount of outstanding debt an applicant has should influence if more credit is granted. 
+Looking at the coefficients for the 3 variables, we can see that they are all positive. 
+This means that the probability of getting approved for a credit card increases as the values for YearsEmployedLog, CreditScoreLog and IncomeLog increase. 
+These relationships make sense for a credit application so there's no exception taken.
+
+While we'd expect Ethnicity does not have an impact on the approval decision, we can do a simple Chi-Squared test to gain additional confidence for compliance testing. 
+The Chi Squared  is a test for independence between two variables.
+In this case, we are testing to be sure approval count is independent of the Ethnicity. 
+The null hypothesis is that Ethnicity and Approved values are independent.
+The resulting p-value is less than 0.05 so we cannot reject the null hypothesis. 
+
+```{r}
+tbl<-Data %>%
+    group_by(Ethnicity) %>%
+    summarise(Freq=n(),
+              Approved=sum(Approved==1))
+tbl
+chisq.test(tbl[2:3])
+```
+
+We can also use this model to make detail testing selections. 
+Any credit application that does not have the same outcome as predicted by the model is potential audit exception. 
+The inherent risk is that a credit card was issued to someone that should have been denied. 
+This account is more likely to default than a properly approved account which, in turn, exposes the company to loss. 
+These would be the items in the bottom left corner of the confusion matrix. 
+After ensembling our models, there were 13 items in the confusion matrix. 
+Testing these 13 items would likely yield more exceptions than a random sampling of the population. 
+This would allow the auditors to find the majority of exceptions with fewer applications tested.

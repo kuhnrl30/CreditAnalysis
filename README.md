@@ -13,24 +13,24 @@ Learning Repository.  The dataset included
 
 ##Variables  
 
-| Original | Renamed | Description |  
-|: ---- :| ---- | ---- |  
-A1  | Male | Binary b,a.  Converted to 0,1  
-A2  | Age | Continuous  
-A3  | Debt | Continuous  
-A4  | Married | u,y,l,t. Converted to 0,1  
-A5  | BankCustomer | g,p,gg. Converted to 0,1  
-A6  | EducationLevel | c, d, cc, i, j, k, m, r, q, w, x, e, aa, ff  
-A7  | Ethnicity | v, h, bb, j, n, z, dd, ff, o  
-A8  | YearsEmployed | Continuous  
-A9  | PriorDefault | t,f  
-A10 | Employed | t,f  
-A11 | CreditScore | Continuous  
-A12 | DriversLicense | t,f  
-A13 | Citizen | g,p,s  
-A14 | ZipCode | Continuous  
-A15 | Income | Continuous  
-A16 | Approved | +,-.  Converted to 0,1  
+| Original | Renamed | Description |
+|: ---- :| ---- | ---- |
+A1  | Male | Binary b,a.  Converted to 0,1
+A2  | Age | Continuous
+A3  | Debt | Continuous
+A4  | Married | u,y,l,t. Converted to 0,1
+A5  | BankCustomer | g,p,gg. Converted to 0,1
+A6  | EducationLevel | c, d, cc, i, j, k, m, r, q, w, x, e, aa, ff
+A7  | Ethnicity | v, h, bb, j, n, z, dd, ff, o
+A8  | YearsEmployed | Continuous
+A9  | PriorDefault | t,f
+A10 | Employed | t,f
+A11 | CreditScore | Continuous
+A12 | DriversLicense | t,f
+A13 | Citizen | g,p,s
+A14 | ZipCode | Continuous
+A15 | Income | Continuous
+A16 | Approved | +,-.  Converted to 0,1
 
 ##Methods  
 - Linear Regression 

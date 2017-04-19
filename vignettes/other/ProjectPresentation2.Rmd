@@ -1,0 +1,315 @@
+---
+title: "Credit Approval Analysis"
+author: "Ryan Kuhn"
+date: "May 1, 2015"
+output: beamer_presentation
+transition: faster
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(eval=F)
+```
+##Background
+
+**Objective:**  
+To demonstrate the analytical techniques taught during the Special Topics in Audit Analytics course at Rutgers University
+
+**Data:**  
+- Dataset- Credit Screening on Credit Card Applications  
+- Source- UCI Machine Learning Repository
+
+**Assumptions:**  
+Field names and values changed to meaningless values. 
+Made assumtions about what attributes the data represents.
+
+
+## Research Question - 1
+
+**Q:**  Is there a relationship between Age, Income, Credit Score, and Debt levels and the credit approval status? 
+Can this relationship be used to predict if a person is granted credit? 
+If yes, does the relationship indicate reasonable risk management strategies?
+
+## Research Question - 1
+
+**Q:**  Is there a relationship between Age, Income, Credit Score, and Debt levels and the credit approval status? 
+Can this relationship be used to predict if a person is granted credit? 
+If yes, does the relationship indicate reasonable risk management strategies?
+
+**A:** Relationships exists between Prior default, Years employed, Credit score, and Income level. 
+These variables are reasonable management strategies. 
+
+## Research Question - 2
+
+**Q:** Ethnicity is a protected status and the decision to approve or deny an application cannot be based on the applicant's ethnicity. 
+Is there a statistically significant difference in how credit is granted between ethnicities that could indicate bias or discrimination? 
+
+>H0: Ethnicity and approval are independent.  
+>H1: Approval status is associated with the ethnicity and credit card company has a compliance risk.
+
+## Research Question - 2
+
+**Q:** Ethnicity is a protected status and the decision to approve or deny an application cannot be based on the applicant's ethnicity. 
+Is there a statistically significant difference in how credit is granted between ethnicities that could indicate bias or discrimination? 
+
+>H0: Ethnicity and approval are independent.  
+>H1: Approval status is dependent on the ethnicity and credit card company has a compliance risk.
+
+**A:**  A chi-squared test did not give evidence that ethnicity and approval status are dependent. 
+We cannot reject the null hypothesis.
+
+##Analytic Methods Used
+
+Methods used: 
+
+- Linear regression 
+- Descriptive Statistics and Normalization
+- Association Rules 
+- Logistic regression
+- Classification and Regression Tree
+- Ensembling
+
+##Linear Regression
+
+Used to fill in missing values in Age
+
+```{r environment, echo=FALSE, results='hide', warning=FALSE,message=FALSE}
+# Set the environment
+suppressWarnings(require(knitr,   quiet=T))
+suppressWarnings(require(ggplot2, quiet=T))
+suppressWarnings(require(dplyr,   quiet=T))
+suppressWarnings(require(reshape2,quiet=T))
+suppressWarnings(require(ROCR,    quiet=T))
+suppressWarnings(require(caTools, quiet=T))
+suppressWarnings(require(rpart,   quiet=T))
+suppressWarnings(require(rpart.plot, quiet=T))
+suppressWarnings(require(arules,  quiet=T))
+suppressWarnings(require(arulesViz,quiet=T))
+suppressWarnings(require(scales,  quiet=T))
+suppressWarnings(require(dplyr,  quiet=T))
+
+
+options(scipen=6, width=100)
+opts_knit$set(width=75)
+setwd("C:/Users/Ryan/Google Drive/School/R-Audit Analytics II/Project")
+opts_chunk$set(echo=F, 
+               message=F, 
+               warning=F, 
+               comment=NA)
+```
+
+```{r loadData}
+#Download the data
+myURL<- "http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.data"
+if(!file.exists("Dataset.csv")){
+    download.file(myURL,"Dataset.csv")
+    }
+rm(myURL)
+
+# Load the data
+Cols<- c(rep("character",2),"numeric",rep("character",4),"numeric",rep("character",2),
+         "numeric",rep("character",3),"numeric","character")
+Data<-read.csv("Dataset.csv",sep=",",colClasses=Cols)
+rm(Cols)
+
+# Give column names by letter
+# names(Data)<- LETTERS[1:16]
+names(Data)<-c("Male","Age","Debt","Married","BankCustomer","EducationLevel","Ethnicity","YearsEmployed","PriorDefault","Employed","CreditScore","DriversLicense","Citizen","ZipCode","Income","Approved")
+```
+
+```{r str, echo=F, results='hold'}
+# Convert binary values to 1 or 0
+Data$Male<- ifelse(Data$Male=="a",1,0)
+Data$Employed<- ifelse(Data$Employed=="t",1,0)
+Data$PriorDefault<-ifelse(Data$PriorDefault=="t",1,0)
+```
+
+```{r transformations}
+# Convert credit granted to 1 or 0
+Data$Approved<-ifelse(Data$Approved=="+",1,0)
+Data$Approved<-factor(Data$Approved)
+
+Data[Data=="?"]<-NA
+```
+
+```{r}
+Data$Age<-as.numeric(Data$Age)
+Numeric<- Data[,c(2:3,8,11,15)]
+
+Mean.Age<- mean(Numeric$Age,na.rm=T)
+
+SD.Age<-round(sd(Numeric$Age, na.rm=T),4)
+```
+
+```{r correlations}
+round(cor(Numeric,use="complete.obs"),3)
+
+AgeMdl<-lm(Age~YearsEmployed, data=Data,na.action=na.exclude)
+AgeMdl$coefficients
+```
+
+
+## Descriptive Stats and Normalization
+Convert values to Z-Scores
+
+```{r transformation, fig.height=3}
+#Convert to z score
+SD.Age<-round(sd(Numeric$Age, na.rm=T),4)
+Data$AgeNorm<- (Data$Age-mean(Data$Age, na.rm=T))/SD.Age
+rm(SD.Age, Mean.Age)
+
+# View the distribution
+par(mfrow=c(1,2), oma=c(0,0,.75,0))
+hist(Data$Age,main=NULL,xlab="Age",col="blue")
+hist(Data$AgeNorm,main=NULL,xlab="AgeNorm",ylab=NULL,col="green")
+title("Distribution of Values Before and After Normalization",outer=T)
+```
+
+```{r plotage, fig.height=2}
+ggplot(Data) + 
+    aes(Approved,AgeNorm) + 
+    geom_boxplot(outlier.colour="red") +
+    theme_bw() +
+    coord_flip() +
+    labs(title="Distribution of AgeNorm by Credit Approval Status")
+```
+
+```{r}
+# Scale the variables
+Temp<- data.frame(scale(Data[,c(3,8,11,15)],center=T,scale=T))
+colnames(Temp)<-c("DebtNorm","YearsEmployedNorm","CreditScoreNorm","IncomeNorm")
+Data<-cbind(Data,Temp)
+rm(Temp)
+```
+
+```{r}
+Temp<- data.frame(scale(log(Data[,c(3,8,11,15)]+1),center=T))
+names(Temp)<-c("DebtLog","YearsEmployedLog","CreditScoreLog","IncomeLog")
+Data<-cbind(Data,Temp)
+rm(Temp)
+```
+
+```{r, results='hide'}
+dev.off()
+
+# Simplify dataset to remove transformed points
+Data<- Data[,-c(2,3,8,11,15,18:21)]
+```
+
+## Association Rules
+
+
+```{r}
+Data$Married<-ifelse(is.na(Data$Married),"u",Data$Married)
+Data$BankCustomer<-ifelse(is.na(Data$BankCustomer),"g",Data$BankCustomer)
+Data$Ethnicity<-ifelse(is.na(Data$Ethnicity),"v",Data$Ethnicity)
+Data$EducationLevel<-ifelse(is.na(Data$EducationLevel),"c",Data$EducationLevel)
+Data$ZipCode<-ifelse(is.na(Data$ZipCode),"00000",Data$ZipCode)
+Data$Male<-ifelse(is.na(Data$Male),"b",Data$Male)
+```
+
+```{r}
+# Convert categorical variables to factors
+Data[,1:10]<- lapply(Data[1:10],function(x) factor(x))
+
+Data$Ethnicity<-relevel(Data$Ethnicity,"v")
+```
+
+```{r apriori, results='hide'}
+# Generate rules
+Rules<- apriori(Data[!incomplete,1:10], 
+                parameter=list(supp=0.1,
+                               conf=0.75,
+                               target='rules'))
+
+
+```
+
+```{r, fig.height=4}
+
+subRules<-head(sort(Rules, by="lift"),15)
+# plot(subRules,method="graph", control=list(type="items", alpha=0.8))
+
+
+# Use for example
+    # First, convert row to transaction set
+basket<-as(Data[248,1:10],"transactions")
+
+    # Find rules wher the rhs equals A.  These rules imply the value in column A.
+Match.RHS<- subset(Rules, subset= rhs %pin% "Male")
+
+    # Of subset of rules, find those where the lhs is a subset of the items in the target row
+Match.LHS<-is.subset(Match.RHS@lhs, basket)
+```
+1. Support: Support is how often the left hand side of the rule occurs in the dataset. 
+In our example above, we would count how many times {u,g,c} occurs and divide by the total number of transactions.
+
+2. Confidence: Confidence measures how often a rule is true. 
+First, we find the subset of all transactions that contain {u,g,c}. 
+Of this subset, we then count the number of transactions that match the right hand side of rule, or {1}. 
+The confidence ratio is calculated by taking the number of times the rule is true and dividing it by the number of times the left hand side occurs.  
+
+
+```{r}
+# View the rules
+inspect(Match.RHS[Match.LHS])
+```
+## Baseline Model
+
+- Simple mean of results. 
+- Establish benchmark to measure model accuracy 
+- 
+
+```{r}
+Train %>%
+    summarise(Total=n(), Success=sum(Approved==1)) %>%
+    mutate(Percent=round(Success/Total*100,2))
+```
+
+## Logistic Regression
+
+```{r samplesplit}
+set.seed(1234)
+
+split<- sample.split(Data$Approved, SplitRatio=0.75)
+Train<- subset(Data,split==TRUE)
+Test <- subset(Data, split==FALSE)
+
+rm(split)
+```
+
+```{r logmodel}
+LogFit<- glm(Approved~AgeNorm+DebtLog+YearsEmployedLog+CreditScoreLog+IncomeLog, data=Train,family=binomial)
+summary(LogFit)
+```
+
+```{r}
+LogPred<- predict(LogFit,newdata=Train, type="response")
+table(Train$Approved, LogPred>0.5)
+```
+
+## CART Model
+```{r, fig.height=3}
+set.seed(1234)
+TreeFit<-rpart(Approved~Male+Married+BankCustomer+EducationLevel+Ethnicity+PriorDefault+Employed+DriversLicense+Citizen+AgeNorm+DebtLog+YearsEmployedLog+CreditScoreLog+IncomeLog, 
+               data=Train, 
+               method="class",
+               control=rpart.control(xval=10,cp=0.025))
+
+TreeFit
+
+prp(TreeFit,main="CART model", digits=6, 
+    extra=1,
+    branch.col="blue",
+    type=4,
+    leaf.round=2,
+    box.col=c("pink","palegreen")[TreeFit$frame$yval],
+    ycompact=T)
+```
+
+## References
+
+Data:  
+http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening  
+
+Analytic Report:  
+http://www.rpubs.com/kuhnrl30/CreditScreen

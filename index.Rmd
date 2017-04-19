@@ -1,0 +1,10 @@
+---
+title: "Credit Analysis"
+author: "Ryan Kuhn"
+date: "April 19, 2017"
+output: html_document
+---
+
+This analysis was the capstone project from my Advanced Topics in Audit Analytics course.  The course was part of the Masters of Financial Accounting program at Rutgers University. The course covered topics such as descriptive statistics up to advanced methods such as association rules.  
+
+The overall objective of the analysis was to demonstrate the methods learned in the course.  To accomplish the objective, I used a dataset from the UCI Machine Learning Repository.

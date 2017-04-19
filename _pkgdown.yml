@@ -1,0 +1,24 @@
+template:
+  ganalytics: 'UA-66230069-1'
+  params:
+    bootswatch: journal
+reference:
+- title: Datasets
+  desc: ~
+  contents:
+  - sales
+  - creditsales
+  - cashsales
+navbar:
+  title: Credit Analysis
+  type: default
+  left:
+  - text: Analysis
+    href: articles/index.html
+  - text: Functions
+    href: reference/index.html
+  right:
+    - text: ryankuhn.net
+      href: http://ryankuhn.net
+    - icon: fa-github
+      href: https://github.com/kuhnrl30/CreditAnalysis
