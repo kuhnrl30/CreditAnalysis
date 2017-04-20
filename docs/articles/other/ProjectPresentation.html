@@ -126,16 +126,12 @@ H1: Approval status is dependent on the ethnicity and credit card company has a 
 <p>Used to fill in missing values in Age</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co">#Download the data</span>
 myURL&lt;-<span class="st"> "http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.data"</span>
-if(!<span class="kw">file.exists</span>(<span class="st">"Dataset.csv"</span>)){
-    <span class="kw">download.file</span>(myURL,<span class="st">"Dataset.csv"</span>)
-    }
-<span class="kw">rm</span>(myURL)
-
-<span class="co"># Load the data</span>
 Cols&lt;-<span class="st"> </span><span class="kw">c</span>(<span class="kw">rep</span>(<span class="st">"character"</span>,<span class="dv">2</span>),<span class="st">"numeric"</span>,<span class="kw">rep</span>(<span class="st">"character"</span>,<span class="dv">4</span>),<span class="st">"numeric"</span>,<span class="kw">rep</span>(<span class="st">"character"</span>,<span class="dv">2</span>),
          <span class="st">"numeric"</span>,<span class="kw">rep</span>(<span class="st">"character"</span>,<span class="dv">3</span>),<span class="st">"numeric"</span>,<span class="st">"character"</span>)
-Data&lt;-<span class="kw">read.csv</span>(<span class="st">"Dataset.csv"</span>,<span class="dt">sep=</span><span class="st">","</span>,<span class="dt">colClasses=</span>Cols)
-<span class="kw">rm</span>(Cols)
+Data&lt;-<span class="st"> </span><span class="kw">read.csv</span>(myURL,
+                <span class="dt">sep=</span><span class="st">","</span>,
+                <span class="dt">colClasses=</span>Cols)
+<span class="kw">rm</span>(Cols, myURL)
 
 <span class="co"># Give column names by letter</span>
 <span class="co"># names(Data)&lt;- LETTERS[1:16]</span>

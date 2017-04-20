@@ -2,7 +2,9 @@
 title: "Credit Approval Analysis"
 author: "Ryan Kuhn"
 date: "May 1, 2015"
-output: beamer_presentation
+output: 
+  ioslides_presentation:
+   theme: journal
 transition: faster
 ---
 
@@ -100,16 +102,12 @@ opts_chunk$set(echo=F,
 ```{r loadData}
 #Download the data
 myURL<- "http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.data"
-if(!file.exists("Dataset.csv")){
-    download.file(myURL,"Dataset.csv")
-    }
-rm(myURL)
-
-# Load the data
 Cols<- c(rep("character",2),"numeric",rep("character",4),"numeric",rep("character",2),
          "numeric",rep("character",3),"numeric","character")
-Data<-read.csv("Dataset.csv",sep=",",colClasses=Cols)
-rm(Cols)
+Data<- read.csv(myURL,
+                sep=",",
+                colClasses=Cols)
+rm(Cols, myURL)
 
 # Give column names by letter
 # names(Data)<- LETTERS[1:16]
